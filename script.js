@@ -32,6 +32,8 @@ let obstacleTimer;
 let backgroundLayers = {};
 let jumpSound, collectSound, hitSound, backgroundMusic;
 let bgImagesLoaded = false;
+let fishCollected = 0;
+
 
 const game = new Phaser.Game(config);
 
@@ -44,11 +46,8 @@ function preload() {
     this.load.image('city-background-scene2', 'img/city-background-scene2.png').on('loaderror', () => {
         console.warn('Failed to load city-background-scene2.png');
     });
-    this.load.image('city-foreground', 'img/city-foreground.png').on('loaderror', () => {
-        console.warn('Failed to load city-foreground.png');
-    });
-    
-    // Carrega os sprites reais
+    this.load.image('cat-shit', 'img/catShit.png');
+    // Carrega os sprites reaispro
     this.load.image('cat-run', 'img/cat-run.png');
     this.load.image('trash-can', 'img/trash-can.png');
     this.load.image('fish', 'img/fish.png');
@@ -101,21 +100,44 @@ function create() {
         console.log('Using fallback for city-background-scene2');
     }
     
-    if (this.textures.exists('city-foreground')) {
-        backgroundLayers.foreground = this.add.tileSprite(0, height - 100, width, 200, 'city-foreground').setOrigin(0, 1);
-        backgroundLayers.foreground.setScale(
-            width / backgroundLayers.foreground.width,
-            200 / backgroundLayers.foreground.height
-        );
-    } else {
-        // Fallback: retângulo colorido
-        backgroundLayers.foreground = this.add.rectangle(0, height - 100, width, 100, 0x353b48).setOrigin(0, 1);
-        console.log('Using fallback for city-foreground');
-    }
 
-    // Chão
-    ground = this.add.rectangle(0, height - 100, width, 100, 0x353b48).setOrigin(0);
-    this.physics.add.existing(ground, true);
+    // --- Chão com Textura de Calçada ---
+    const groundHeight = 100;
+    const tileColor1 = 0x4a4a4a; // Cor da lajota
+    const tileColor2 = 0x5a5a5a; // Cor alternativa da lajota
+    const tileSize = 50; // Tamanho de cada "lajota"
+
+    // Cria um objeto gráfico temporário para desenhar a textura
+    const graphics = this.add.graphics();
+    graphics.fillStyle(tileColor1);
+    graphics.fillRect(0, 0, tileSize, tileSize);
+    graphics.fillStyle(tileColor2);
+    graphics.fillRect(tileSize, 0, tileSize, tileSize);
+    graphics.fillStyle(tileColor2);
+    graphics.fillRect(0, tileSize, tileSize, tileSize);
+    graphics.fillStyle(tileColor1);
+    graphics.fillRect(tileSize, tileSize, tileSize, tileSize);
+
+    // Gera uma textura a partir do desenho e a destrói em seguida
+    graphics.generateTexture('sidewalk-texture', tileSize * 2, tileSize * 2);
+    graphics.destroy();
+
+    // Cria o chão usando a nova textura como um TileSprite (para repetir)
+    ground = this.add.tileSprite(0, height - groundHeight, width, groundHeight, 'sidewalk-texture').setOrigin(0);
+    this.physics.add.existing(ground, true); // Adiciona física ao chão
+
+    // Adiciona um evento para mover a textura da calçada junto com o jogo
+    this.time.addEvent({
+        delay: 16, // Aproximadamente 60 FPS
+        loop: true,
+        callback: () => {
+            if (gameStarted && !gameOverText.visible) {
+                // A velocidade do chão deve ser a mesma do jogo para parecer que o gato está correndo sobre ele
+                ground.tilePositionX -= gameSpeed / 60; 
+            }
+        }
+    });
+
 
     // --- JOGADOR ---
     // Verifica se a textura do gato foi carregada, senão cria um placeholder
@@ -139,7 +161,7 @@ function create() {
     player.body.setSize(player.width * 0.8, player.height * 0.5).setOffset(player.width * 0.1, player.height * 0.2);
     this.physics.add.collider(player, ground);
     
-    this.physics.pause();
+    // >>>>>>>>>>>>>>>>>>>>>>>>     this.physics.pause();
 
     // --- EFEITOS VISUAIS ---
     dustParticles = this.add.particles(0, 0, null, {
@@ -166,16 +188,16 @@ function create() {
         strokeThickness: 6 
     };
     
-    scoreText = this.add.text(width - 30, 30, `PEIXES: ${score}`, fontStyle).setOrigin(1, 0).setScrollFactor(0);
+    scoreText = this.add.text(width - 30, 30, `FISHES: ${score}`, fontStyle).setOrigin(1, 0).setScrollFactor(0);
     
-    gameOverText = this.add.text(width / 2, height / 2 - 50, 'FIM DE JOGO\nClique para reiniciar', { 
+    gameOverText = this.add.text(width / 2, height / 2 - 50, 'GAME OVER\nClick to restart', { 
         ...fontStyle, 
         fontSize: '48px', 
         align: 'center', 
         fill: '#ff3838' 
     }).setOrigin(0.5).setVisible(false).setScrollFactor(0);
 
-    startText = this.add.text(width / 2, height / 2, 'CLIQUE PARA COMEÇAR', { 
+    startText = this.add.text(width / 2, height / 2, 'CLICK TO START', { 
         ...fontStyle, 
         fontSize: '48px',
         fill: '#ff9f43'
@@ -242,9 +264,6 @@ function update(time, delta) {
     }
     if (backgroundLayers.layer2 instanceof Phaser.GameObjects.TileSprite) {
         backgroundLayers.layer2.tilePositionX += 1.5;  // Velocidade média
-    }
-    if (backgroundLayers.foreground instanceof Phaser.GameObjects.TileSprite) {
-        backgroundLayers.foreground.tilePositionX += 6; // Mais rápido (frente)
     }
 
     if (player.body.blocked.down) {
@@ -325,10 +344,14 @@ function handleCollision(obstacle, isObstacle, scene) {
         hitSound.play();
         backgroundMusic.stop();
     } else {
+        // --- Lógica de Coleta de Peixe ---
         score++;
-        scoreText.setText(`PEIXES: ${score}`);
+        scoreText.setText(`FISH: ${score}`);
         collectSound.play();
-        
+        fishCollected++;
+        console.log(`Peixes coletados: ${fishCollected}`); // Para depuração
+
+        // Efeito visual da coleta
         const collectEffect = scene.add.circle(obstacle.x, obstacle.y, 10, 0x00BFFF).setScale(1);
         scene.tweens.add({ 
             targets: collectEffect, 
@@ -339,5 +362,52 @@ function handleCollision(obstacle, isObstacle, scene) {
         });
 
         obstacle.destroy();
+
+        // --- Lógica da Pausa para Necessidades ---
+        if (fishCollected === 3 || fishCollected === 10 || fishCollected === 20) {
+            // Pausa o jogo, mas deixa o gato cair (gravidade ativa)
+            gameStarted = false;
+            obstacleTimer.paused = true;
+            player.setVelocityX(0); // Para o movimento horizontal
+            // Não pausamos a física aqui para o gato poder cair
+
+            // Cria um evento para verificar quando o gato toca o chão
+            const checkGroundEvent = scene.time.addEvent({
+                delay: 50, // Verifica a cada 50ms
+                loop: true,
+                callback: () => {
+                    if (player.body.blocked.down) {
+                        // O gato tocou o chão, agora começa a cena!
+                        checkGroundEvent.remove(); // Para de verificar
+                        scene.physics.pause(); // Pausa a física completamente agora
+                        player.setVelocityY(0); // Garante que ele pare de se mover verticalmente
+
+                        // Troca a imagem e ajusta a posição
+                        player.setTexture("cat-shit");
+                        player.y += 30;
+                        player.body.setAllowGravity(false); // Impede que o gato caia durante a pausa
+
+                        // Adiciona o som e o balão de fala (vamos criar em breve)
+                        // shameSound.play(); 
+                        // thoughtBubble.setVisible(true);
+
+                        // Timer para voltar ao normal
+                        scene.time.delayedCall(2000, () => {
+                            player.y -= 30;
+                            player.setTexture("cat-run");
+                            player.body.setAllowGravity(true); // Restaura a gravidade
+                            gameStarted = true;
+                            obstacleTimer.paused = false;
+                            scene.physics.resume();
+                            // Re-adiciona o collider para garantir que o gato não caia
+                            scene.physics.add.collider(player, ground);
+                            fishCollected = 0; // Reseta a contagem de peixes
+                            player.body.enable = true; // Garante que o corpo físico esteja habilitado
+                            // thoughtBubble.setVisible(false);
+                        });
+                    }
+                }
+            });
+        }
     }
 }
