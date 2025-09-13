@@ -114,7 +114,7 @@ function create() {
         blendMode: 'ADD',
         tint: 0x00ff00,
         // --- AJUSTE DE BRILHO ---
-        quantity: 5, // Aumentado de 3 para 5 para um pouco mais de brilho
+        quantity: 7, // Aumentado de 3 para 5 para um pouco mais de brilho
         on: false 
     });
     dustParticles.startFollow(player, -player.width/2 * player.scale + 20, player.height/2 * player.scale - 10);
@@ -156,7 +156,7 @@ function create() {
         repeat: -1 
     });
 
-    // --- LÓGICA DE PULO REATORADA ---
+    // --- LÓGICA DE PULO REFATORADA ---
     // Criamos uma função separada para o pulo para ser chamada por múltiplos controles
     const jump = () => {
         if (player.body.blocked.down && !gamePausedForEvent) {
@@ -203,12 +203,8 @@ function create() {
 // --- ATUALIZAÇÃO DO JOGO ---
 function update(time, delta) {
     if (!gameStarted || gameOverText.visible || gamePausedForEvent) {
-        if (gamePausedForEvent && player.body.velocity.x > 0) {
-            player.setVelocityX(Math.max(0, player.body.velocity.x - 5)); 
-        }
         return;
     }
-    
     gameSpeed -= (speedIncreasePerSecond * delta) / 1000;
 
     backgroundLayers.layer1.tilePositionX += 0.5;
@@ -251,7 +247,6 @@ function spawnObstacle() {
             repeat: -1 
         });
     }
-
     obstacle.body.setVelocityX(isObstacle ? gameSpeed : gameSpeed * 1.2);
 }
 
@@ -291,6 +286,10 @@ function handleCollision(player, obstacle) {
             
             player.body.stop(); 
             player.setVelocity(0,0);
+
+            obstacles.getChildren().forEach( obstacle => {
+                obstacle.body.setVelocityX(0, 0);
+            });
             
             const checkGroundEvent = scene.time.addEvent({
                 delay: 50,
@@ -303,7 +302,7 @@ function handleCollision(player, obstacle) {
                             player.setTexture("cat-shit");
                             player.body.setSize(player.width * 0.9, player.height * 0.4).setOffset(player.width * 0.05, player.height * 0.55);
                         } else {
-                             player.setTint(0x996633); 
+                            player.setTint(0x996633); 
                         }
                         
                         player.y = ground.y - player.body.height / 2 - player.body.offset.y;
@@ -313,6 +312,8 @@ function handleCollision(player, obstacle) {
                             player.clearTint(); 
                             player.body.setSize(player.width * 0.8, player.height * 0.5).setOffset(player.width * 0.1, player.height * 0.2);
                             player.y = ground.y - player.body.height / 2 - player.body.offset.y;
+
+                            obstacles.clear(true, true);
 
                             gamePausedForEvent = false;
                             if(gameStarted) { 
